@@ -1,0 +1,45 @@
+# Home Assistant Configuration
+# Configure a default setup of Home Assistant (frontend, api, etc)
+default_config:
+
+# Load frontend themes
+frontend:
+  themes: !include_dir_merge_named themes
+
+# Text to speech
+tts:
+  - platform: google_translate
+
+# Group configuration
+group: !include groups.yaml
+
+# Automation configuration
+automation: !include automations.yaml
+
+# Script configuration
+script: !include scripts.yaml
+
+# Scene configuration
+scene: !include scenes.yaml
+
+# Input booleans for tracking music state
+input_boolean:
+  sonos_music_playing:
+    name: "Sonos Music Playing"
+    icon: mdi:music
+
+# Input text to store the last occupied room
+input_text:
+  sonos_last_active_room:
+    name: "Last Active Room with Music"
+    initial: "none"
+
+# Template sensors for room occupancy
+template:
+  - binary_sensor:
+      - name: "Any Room Occupied"
+        state: >
+          {{ is_state('binary_sensor.kitchen_occupancy', 'on') or
+             is_state('binary_sensor.livingroom_occupancy', 'on') or
+             is_state('binary_sensor.bedroom_occupancy', 'on') or
+             is_state('binary_sensor.bathroom_occupancy', 'on') }}

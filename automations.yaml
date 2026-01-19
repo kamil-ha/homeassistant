@@ -1,0 +1,136 @@
+# Sonos Occupancy-Based Music Management Automations
+
+# Automation 1: Move music to newly occupied room
+- id: sonos_follow_occupancy
+  alias: "Sonos: Follow Occupancy to Rooms"
+  description: "Automatically join Sonos speakers in occupied rooms and unjoin from unoccupied rooms"
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.kitchen_occupancy
+        - binary_sensor.livingroom_occupancy
+        - binary_sensor.bedroom_occupancy
+        - binary_sensor.bathroom_occupancy
+      to: 'on'
+  condition:
+    - condition: state
+      entity_id: input_boolean.sonos_music_playing
+      state: 'on'
+  action:
+    - service: script.sonos_join_occupied_rooms
+      data: {}
+
+# Automation 2: Remove music from unoccupied rooms
+- id: sonos_unjoin_unoccupied
+  alias: "Sonos: Unjoin Unoccupied Rooms"
+  description: "Remove Sonos speakers from unoccupied rooms"
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.kitchen_occupancy
+        - binary_sensor.livingroom_occupancy
+        - binary_sensor.bedroom_occupancy
+        - binary_sensor.bathroom_occupancy
+      to: 'off'
+      for:
+        seconds: 30  # Wait 30 seconds before removing to avoid flickering
+  condition:
+    - condition: state
+      entity_id: input_boolean.sonos_music_playing
+      state: 'on'
+  action:
+    - service: script.sonos_unjoin_unoccupied_rooms
+      data: {}
+
+# Automation 3: Pause music when all rooms become unoccupied
+- id: sonos_pause_all_unoccupied
+  alias: "Sonos: Pause When All Rooms Unoccupied"
+  description: "Pause Sonos music when all rooms are unoccupied"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.any_room_occupied
+      to: 'off'
+      for:
+        minutes: 5  # Wait 5 minutes before pausing
+  condition:
+    - condition: state
+      entity_id: input_boolean.sonos_music_playing
+      state: 'on'
+  action:
+    - service: media_player.media_pause
+      target:
+        entity_id: media_player.sonos_kitchen
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.sonos_music_playing
+
+# Automation 4: Resume music when someone enters after all rooms were empty
+- id: sonos_resume_on_occupancy
+  alias: "Sonos: Resume When Room Becomes Occupied"
+  description: "Resume Sonos music when a room becomes occupied after all were empty"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.any_room_occupied
+      from: 'off'
+      to: 'on'
+  condition:
+    - condition: state
+      entity_id: input_boolean.sonos_music_playing
+      state: 'off'
+    # Only resume if music was playing recently (within last hour)
+    - condition: template
+      value_template: >
+        {{ (as_timestamp(now()) - as_timestamp(states.input_boolean.sonos_music_playing.last_changed)) < 3600 }}
+  action:
+    - service: media_player.media_play
+      target:
+        entity_id: media_player.sonos_kitchen
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.sonos_music_playing
+    - service: script.sonos_join_occupied_rooms
+      data: {}
+
+# Automation 5: Track when Sonos is actually playing
+- id: sonos_track_playing_state
+  alias: "Sonos: Track Playing State"
+  description: "Keep input_boolean in sync with actual Sonos state"
+  trigger:
+    - platform: state
+      entity_id:
+        - media_player.sonos_kitchen
+        - media_player.sonos_livingroom
+        - media_player.sonos_bedroom
+        - media_player.sonos_bathroom
+      to: 'playing'
+  action:
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.sonos_music_playing
+
+# Automation 6: Track when Sonos stops playing
+- id: sonos_track_stopped_state
+  alias: "Sonos: Track Stopped State"
+  description: "Update input_boolean when Sonos stops"
+  trigger:
+    - platform: state
+      entity_id:
+        - media_player.sonos_kitchen
+        - media_player.sonos_livingroom
+        - media_player.sonos_bedroom
+        - media_player.sonos_bathroom
+      to: 'paused'
+      for:
+        seconds: 5
+  condition:
+    # Only update if ALL Sonos speakers are paused/idle
+    - condition: template
+      value_template: >
+        {{ states('media_player.sonos_kitchen') in ['paused', 'idle'] and
+           states('media_player.sonos_livingroom') in ['paused', 'idle'] and
+           states('media_player.sonos_bedroom') in ['paused', 'idle'] and
+           states('media_player.sonos_bathroom') in ['paused', 'idle'] }}
+  action:
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.sonos_music_playing
