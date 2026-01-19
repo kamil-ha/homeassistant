@@ -1,0 +1,140 @@
+# Sonos Management Scripts
+
+# Script to join all occupied rooms to the Sonos group
+sonos_join_occupied_rooms:
+  alias: "Join Occupied Rooms to Sonos Group"
+  description: "Joins Sonos speakers in occupied rooms to the main group"
+  sequence:
+    # Determine which room is the master (first occupied room or kitchen as default)
+    - variables:
+        master_speaker: >
+          {% if is_state('binary_sensor.kitchen_occupancy', 'on') %}
+            media_player.sonos_kitchen
+          {% elif is_state('binary_sensor.livingroom_occupancy', 'on') %}
+            media_player.sonos_livingroom
+          {% elif is_state('binary_sensor.bedroom_occupancy', 'on') %}
+            media_player.sonos_bedroom
+          {% elif is_state('binary_sensor.bathroom_occupancy', 'on') %}
+            media_player.sonos_bathroom
+          {% else %}
+            media_player.sonos_kitchen
+          {% endif %}
+
+    # Join kitchen if occupied
+    - if:
+        - condition: state
+          entity_id: binary_sensor.kitchen_occupancy
+          state: 'on'
+        - condition: template
+          value_template: "{{ master_speaker != 'media_player.sonos_kitchen' }}"
+      then:
+        - service: media_player.join
+          target:
+            entity_id: media_player.sonos_kitchen
+          data:
+            group_members:
+              - "{{ master_speaker }}"
+
+    # Join living room if occupied
+    - if:
+        - condition: state
+          entity_id: binary_sensor.livingroom_occupancy
+          state: 'on'
+        - condition: template
+          value_template: "{{ master_speaker != 'media_player.sonos_livingroom' }}"
+      then:
+        - service: media_player.join
+          target:
+            entity_id: "{{ master_speaker }}"
+          data:
+            group_members:
+              - media_player.sonos_livingroom
+
+    # Join bedroom if occupied
+    - if:
+        - condition: state
+          entity_id: binary_sensor.bedroom_occupancy
+          state: 'on'
+        - condition: template
+          value_template: "{{ master_speaker != 'media_player.sonos_bedroom' }}"
+      then:
+        - service: media_player.join
+          target:
+            entity_id: "{{ master_speaker }}"
+          data:
+            group_members:
+              - media_player.sonos_bedroom
+
+    # Join bathroom if occupied
+    - if:
+        - condition: state
+          entity_id: binary_sensor.bathroom_occupancy
+          state: 'on'
+        - condition: template
+          value_template: "{{ master_speaker != 'media_player.sonos_bathroom' }}"
+      then:
+        - service: media_player.join
+          target:
+            entity_id: "{{ master_speaker }}"
+          data:
+            group_members:
+              - media_player.sonos_bathroom
+
+# Script to unjoin speakers from unoccupied rooms
+sonos_unjoin_unoccupied_rooms:
+  alias: "Unjoin Unoccupied Rooms from Sonos Group"
+  description: "Removes Sonos speakers from unoccupied rooms"
+  sequence:
+    # Unjoin kitchen if not occupied
+    - if:
+        - condition: state
+          entity_id: binary_sensor.kitchen_occupancy
+          state: 'off'
+      then:
+        - service: media_player.unjoin
+          target:
+            entity_id: media_player.sonos_kitchen
+
+    # Unjoin living room if not occupied
+    - if:
+        - condition: state
+          entity_id: binary_sensor.livingroom_occupancy
+          state: 'off'
+      then:
+        - service: media_player.unjoin
+          target:
+            entity_id: media_player.sonos_livingroom
+
+    # Unjoin bedroom if not occupied
+    - if:
+        - condition: state
+          entity_id: binary_sensor.bedroom_occupancy
+          state: 'off'
+      then:
+        - service: media_player.unjoin
+          target:
+            entity_id: media_player.sonos_bedroom
+
+    # Unjoin bathroom if not occupied
+    - if:
+        - condition: state
+          entity_id: binary_sensor.bathroom_occupancy
+          state: 'off'
+      then:
+        - service: media_player.unjoin
+          target:
+            entity_id: media_player.sonos_bathroom
+
+# Manual script to start music in all occupied rooms
+sonos_start_music_occupied_rooms:
+  alias: "Start Music in Occupied Rooms"
+  description: "Manually start music in all currently occupied rooms"
+  sequence:
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.sonos_music_playing
+    - service: media_player.media_play
+      target:
+        entity_id: media_player.sonos_kitchen
+    - service: script.sonos_join_occupied_rooms
+      data: {}
